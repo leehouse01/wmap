@@ -3,7 +3,7 @@
 <html lang="ko">
 <head>
     <meta charset="utf-8">
-    <title>세계지리 인터랙티브 지도</title>
+    <title>세계지리 인터랙티브 지도 (향상판)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         :root{
@@ -86,9 +86,6 @@
     </aside>
 
     <!-- D3 & TopoJSON -->
-    <script>
-    // Embed minimized copy of d3 and topojson via CDN
-    </script>
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
     <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
 
@@ -106,13 +103,26 @@
 
     const path = d3.geoPath().projection(projection);
 
-    // Tooltip (mobile‑friendly info panel)
+    // side panel
     const infoBox = document.getElementById("infoBox");
     const infoContent = document.getElementById("infoContent");
     const closeBtn = document.getElementById("closeBtn");
     closeBtn.addEventListener("click", () => infoBox.classList.remove("open"));
 
-    // Load world map
+    // 1) Load all country data once and map by numeric code
+    let countryDataByCCN3 = {};
+    fetch("https://restcountries.com/v3.1/all?fields=translations,name,capital,region,population,ccn3")
+        .then(r => r.json())
+        .then(list => {
+            list.forEach(c => {
+                if (c.ccn3) {
+                    countryDataByCCN3[c.ccn3] = c;
+                }
+            });
+        })
+        .catch(err => console.error(err));
+
+    // 2) Load world map
     d3.json("https://unpkg.com/world-atlas@2/countries-110m.json").then(topology => {
         const countries = topojson.feature(topology, topology.objects.countries).features;
 
@@ -124,8 +134,8 @@
             .attr("fill", "#30363d")
             .attr("stroke", "#0d1117")
             .attr("stroke-width", .5)
-            .attr("class","country")
-            .style("cursor","pointer")
+            .attr("class", "country")
+            .style("cursor", "pointer")
             .on("click", (event, d) => {
                 showCountryInfo(d.id);
             });
@@ -140,31 +150,29 @@
         });
     });
 
-    function showCountryInfo(numericCode){
+    function showCountryInfo(ccn3) {
         infoBox.classList.add("open");
-        infoBox.setAttribute("aria-hidden","false");
-        infoContent.innerHTML = '<div id="spinner"></div>';
+        infoBox.setAttribute("aria-hidden", "false");
 
-        fetch("https://restcountries.com/v3.1/alpha/"+numericCode)
-        .then(resp => resp.json())
-        .then(data => {
-            const c = data[0];
-            const nameKo = c.translations.kor?.common || c.name.common;
-            const capital = c.capital ? c.capital[0] : "정보 없음";
-            const population = c.population.toLocaleString("ko-KR");
-            const region = c.region;
+        const data = countryDataByCCN3[String(ccn3).padStart(3, '0')];
 
-            infoContent.innerHTML = `
-                <h2>\${nameKo}</h2>
-                <p><strong>수도:</strong> \${capital}</p>
-                <p><strong>대륙:</strong> \${region}</p>
-                <p><strong>인구:</strong> 약 \${population}명</p>
-                <p style="margin-top:1rem;font-size:.85rem;">데이터 출처: restcountries.com</p>
-            `;
-        }).catch(err=>{
-            infoContent.innerHTML = "<p>데이터를 불러올 수 없습니다.</p>";
-            console.error(err);
-        });
+        if (!data) {
+            infoContent.innerHTML = "<p>데이터를 찾을 수 없습니다.</p>";
+            return;
+        }
+
+        const nameKo = data.translations?.kor?.common || data.name.common;
+        const capital = data.capital ? data.capital[0] : "정보 없음";
+        const population = data.population.toLocaleString("ko-KR");
+        const region = data.region;
+
+        infoContent.innerHTML = `
+            <h2>${nameKo}</h2>
+            <p><strong>수도:</strong> ${capital}</p>
+            <p><strong>대륙:</strong> ${region}</p>
+            <p><strong>인구:</strong> 약 ${population}명</p>
+            <p style="margin-top:1rem;font-size:.85rem;">데이터 출처: restcountries.com</p>
+        `;
     }
     </script>
 </body>
