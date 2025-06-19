@@ -1,0 +1,171 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <title>세계지리 인터랙티브 지도</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root{
+            --bg:#0d1117;
+            --panel:#161b22;
+            --accent:#58a6ff;
+            --hover:#1f6feb;
+            --text:#c9d1d9;
+        }
+        html,body{
+            margin:0;
+            height:100%;
+            font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+            background:var(--bg);
+            color:var(--text);
+            overflow:hidden;
+        }
+        #map{
+            height:100%;
+            width:100%;
+        }
+        #infoBox{
+            position:fixed;
+            right:0;
+            top:0;
+            width:320px;
+            height:100%;
+            background:var(--panel);
+            box-shadow:-2px 0 8px rgba(0,0,0,.4);
+            transform:translateX(100%);
+            transition:transform .35s ease;
+            padding:1rem 1.25rem;
+            overflow-y:auto;
+            z-index:10;
+        }
+        #infoBox.open{
+            transform:translateX(0);
+        }
+        #infoBox h2{
+            margin-top:0;
+            color:var(--accent);
+        }
+        #closeBtn{
+            position:absolute;
+            top:12px;
+            right:12px;
+            background:transparent;
+            border:none;
+            font-size:1.5rem;
+            color:var(--accent);
+            cursor:pointer;
+        }
+        .country:hover{
+            fill:var(--hover) !important;
+        }
+        #spinner{
+            margin:2rem auto;
+            width:48px;
+            height:48px;
+            border-radius:50%;
+            border:6px solid var(--accent);
+            border-top-color:transparent;
+            animation:spin 1s linear infinite;
+        }
+        @keyframes spin{
+            to{transform:rotate(360deg)}
+        }
+        @media (max-width:600px){
+            #infoBox{width:100%}
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <aside id="infoBox" aria-hidden="true">
+        <button id="closeBtn" aria-label="close">&times;</button>
+        <div id="infoContent">
+            <p>국가를 선택해 보세요!</p>
+        </div>
+    </aside>
+
+    <!-- D3 & TopoJSON -->
+    <script>
+    // Embed minimized copy of d3 and topojson via CDN
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+
+    <script>
+    const width = window.innerWidth,
+          height = window.innerHeight;
+
+    const svg = d3.select("#map").append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+    const projection = d3.geoMercator()
+        .scale((width / 2 / Math.PI) * 1.1)
+        .translate([width / 2, height / 1.5]);
+
+    const path = d3.geoPath().projection(projection);
+
+    // Tooltip (mobile‑friendly info panel)
+    const infoBox = document.getElementById("infoBox");
+    const infoContent = document.getElementById("infoContent");
+    const closeBtn = document.getElementById("closeBtn");
+    closeBtn.addEventListener("click", () => infoBox.classList.remove("open"));
+
+    // Load world map
+    d3.json("https://unpkg.com/world-atlas@2/countries-110m.json").then(topology => {
+        const countries = topojson.feature(topology, topology.objects.countries).features;
+
+        svg.append("g")
+            .selectAll("path")
+            .data(countries)
+            .enter().append("path")
+            .attr("d", path)
+            .attr("fill", "#30363d")
+            .attr("stroke", "#0d1117")
+            .attr("stroke-width", .5)
+            .attr("class","country")
+            .style("cursor","pointer")
+            .on("click", (event, d) => {
+                showCountryInfo(d.id);
+            });
+
+        window.addEventListener("resize", () => {
+            const w = window.innerWidth, h = window.innerHeight;
+            svg.attr("width", w).attr("height", h);
+            projection
+                .scale((w / 2 / Math.PI) * 1.1)
+                .translate([w / 2, h / 1.5]);
+            svg.selectAll("path").attr("d", path);
+        });
+    });
+
+    function showCountryInfo(numericCode){
+        infoBox.classList.add("open");
+        infoBox.setAttribute("aria-hidden","false");
+        infoContent.innerHTML = '<div id="spinner"></div>';
+
+        fetch("https://restcountries.com/v3.1/alpha/"+numericCode)
+        .then(resp => resp.json())
+        .then(data => {
+            const c = data[0];
+            const nameKo = c.translations.kor?.common || c.name.common;
+            const capital = c.capital ? c.capital[0] : "정보 없음";
+            const population = c.population.toLocaleString("ko-KR");
+            const region = c.region;
+
+            infoContent.innerHTML = `
+                <h2>\${nameKo}</h2>
+                <p><strong>수도:</strong> \${capital}</p>
+                <p><strong>대륙:</strong> \${region}</p>
+                <p><strong>인구:</strong> 약 \${population}명</p>
+                <p style="margin-top:1rem;font-size:.85rem;">데이터 출처: restcountries.com</p>
+            `;
+        }).catch(err=>{
+            infoContent.innerHTML = "<p>데이터를 불러올 수 없습니다.</p>";
+            console.error(err);
+        });
+    }
+    </script>
+</body>
+</html>
